@@ -6,18 +6,16 @@ import os
 import spacy
 import time
 import argparse
+import re
 
 load_dotenv()
 nlp = spacy.load("en_core_web_sm")
 
-
 def fetch_html(url):
     return requests.get(url).text
 
-
 def parse_html(html):
     return BeautifulSoup(html, "html.parser")
-
 
 def process_paragraphs(soup, indicators):
     paragraphs = soup.find_all("p")
@@ -26,7 +24,6 @@ def process_paragraphs(soup, indicators):
         for p in paragraphs
         if any(indicator in p.get_text() for indicator in indicators)
     ]
-
 
 def extract_treatment(paragraph, retries=3):
     treatment = None
@@ -42,12 +39,11 @@ def extract_treatment(paragraph, retries=3):
                     },
                     {
                         "role": "system",
-                        "content": f"{paragraph} Does this paragraph indicate negative treatment of a legal case?  Identify which one. Structure your response like so, Negatively treated case: [case name], nature of the negative treatment: [nature], explanation for why you determined this case was negatively treated: [explanation]. Make sure the formatting is precisely as I have outlined, stating the category of information, followed by a colon, and a ',' after each explanation.",
+                        "content": f"{paragraph} Does this paragraph indicate negative treatment of a legal case?  Identify which one. Structure your response like so, Negatively treated case: [case name], nature of the negative treatment: [nature], explanation for why you determined this case was negatively treated: [explanation]. Make sure the formatting is precisely as I have outlined, stating the category of information, followed by a colon, and a ',' after each explanation. For the case name, do not include any information other than the full name of the case.",
                     },
                 ],
             )
             treatment = result["choices"][0]["message"]["content"]
-            print(treatment)
             time.sleep(5)
             break
         except Exception as e:
@@ -98,25 +94,25 @@ def extract_negative_treatments(slug):
                 # process paragraphs likely to contain indcators
 
     for case in treatments.keys():
-        citation_start_index = case_text.find(case)
-        if citation_start_index != -1:
-            citation_end_index = case_text.find(".", citation_start_index)
-            if citation_end_index != 0.1:
-                treatments[case]["citation"] = case_text[citation_start_index]
-            else:
-                treatments[case]["citation"] = "Citation not found in the text"
+      citation_start_index = case_text.find(case)
+      if citation_start_index != -1:
+        match = re.search(r'(\b' + re.escape(case) + r'\b.*?(?=\s{2,}|\n|$))', case_text[citation_start_index:])
+        if match:
+          treatments[case]["citation"] = match.group(0)
         else:
-            treatments[case]["citation"] = "Case not found in the text"
+          treatments[case]["citation"] = "Citation not found in the text"
+      else:
+        treatments[case]["citation"] = "Case not found in the text."
 
     if not treatments:
         return "No negative treatment found."
 
     formatted_treatments = []
     for case, treatment in treatments.items():
-        # if "v." in case:
+      if case not in ["Not Applicable", "No specific case mentioned", "Doctrine"] and "Case not found in the text." not in treatment["citation"]:
         formatted_treatments.append(
-          f'Case: {case}\nNature: {treatment["nature"]}\nText: {treatment["text"]}\nExplanation: {treatment["explanation"]}\n---'
-          )
+          f'Case: {case}\nNature: {treatment["nature"]}\nText: {treatment["text"]}\nExplanation: {treatment["explanation"]}\nCitation: {treatment["citation"]}\n---'
+        )
     return "\n".join(formatted_treatments)
 ##
 
