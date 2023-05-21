@@ -118,7 +118,7 @@ def extract_negative_treatments(slug):
           f'Case: {case}\nNature: {treatment["nature"]}\nText: {treatment["text"]}\nExplanation: {treatment["explanation"]}\n---'
           )
     return "\n".join(formatted_treatments)
-
+##
 
 def main():
     parser = argparse.ArgumentParser(
